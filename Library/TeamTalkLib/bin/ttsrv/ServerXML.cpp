@@ -1515,12 +1515,12 @@ bool ServerXML::CleanupChannelOperators(int deletedChannelID)
         pElement = pElement->FirstChildElement("permanent-channels");
         if (pElement == nullptr)
             return nullptr;
-        stdstrings_t tokens = StringTokenize(chpath, "/");
+        strings_t tokens = Tokenize(Utf8ToUnicode(chpath.c_str()), ACE_TEXT("/"));
         while ((pElement != nullptr) && (!tokens.empty()))
         {
             pElement = pElement->FirstChildElement("channel");
             string val;
-            if(GetString(pElement, "name", val) && val == tokens[0])
+            if(GetString(pElement, "name", val) && val == UnicodeToUtf8(tokens[0]))
                 tokens.erase(tokens.begin());
             else
                 pElement = pElement->NextSiblingElement("channel");
@@ -1588,15 +1588,15 @@ bool ServerXML::CleanupChannelOperators(int deletedChannelID)
     time_t StringToDate(const std::string& date)
     {
         tm t = {};
-        stdstrings_t tokens = StringTokenize(date, "/ :");
+        strings_t tokens = Tokenize(Utf8ToUnicode(date.c_str()), ACE_TEXT("/ :"));
         if(tokens.size() == 5)
         {
             t.tm_isdst = -1;
-            t.tm_year = std::stoi(tokens[0])-1900;
-            t.tm_mon = std::stoi(tokens[1])-1;
-            t.tm_mday = std::stoi(tokens[2]);
-            t.tm_hour = std::stoi(tokens[3]);
-            t.tm_min = std::stoi(tokens[4]);
+            t.tm_year = static_cast<int>(String2I(tokens[0]))-1900;
+            t.tm_mon = static_cast<int>(String2I(tokens[1]))-1;
+            t.tm_mday = static_cast<int>(String2I(tokens[2]));
+            t.tm_hour = static_cast<int>(String2I(tokens[3]));
+            t.tm_min = static_cast<int>(String2I(tokens[4]));
             return std::mktime(&t);
         }
         return 0;

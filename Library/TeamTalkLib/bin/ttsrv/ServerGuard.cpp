@@ -51,7 +51,7 @@ typedef std::wostringstream tostringstream;
 using tostringstream = std::ostringstream;
 #endif
 
-static ACE_TString LogPrepare(const ACE_TString& str)
+static tstring LogPrepare(const tstring& str)
 {
     return PrepareString(str);
 }
@@ -82,7 +82,7 @@ void ServerGuard::OnUserLogin(const ServerUser& user)
     TT_LOG(oss.str().c_str());
 }
 
-void ServerGuard::OnUserAuthFailed(const ServerUser& user, const ACE_TString& username)
+void ServerGuard::OnUserAuthFailed(const ServerUser& user, const tstring& username)
 {
     tostringstream oss;
     oss << ACE_TEXT("User #") << user.GetUserID() << ACE_TEXT(" ");
@@ -149,7 +149,7 @@ void ServerGuard::OnUserDisconnected(const ServerUser& user)
     TT_LOG(oss.str().c_str());
 }
 
-void ServerGuard::OnUserCryptError(const ServerUser& user, int sslerr, const ACE_TString& msg)
+void ServerGuard::OnUserCryptError(const ServerUser& user, int sslerr, const tstring& msg)
 {
     tostringstream oss;
     oss << ACE_TEXT("User #") << user.GetUserID() << ACE_TEXT(" ");
@@ -216,7 +216,7 @@ void ServerGuard::OnUserBanned(const ServerUser& banee, const ServerUser& banner
     TT_LOG(oss.str().c_str());
 }
 
-void ServerGuard::OnUserBanned(const ACE_TString& ipaddr, const ServerUser& banner)
+void ServerGuard::OnUserBanned(const tstring& ipaddr, const ServerUser& banner)
 {
     tostringstream oss;
     oss << ACE_TEXT("User #") << banner.GetUserID() << ACE_TEXT(" ");
@@ -744,13 +744,13 @@ void ServerGuard::WebLoginBearWare(ServerNode* servernode, uint32_t userid, User
     }
 
 
-    ACE_CString url = WEBLOGIN_URL;
+    std::string url = WEBLOGIN_URL;
     url += "client=" TEAMTALK_LIB_NAME;
     url += "&version=" TEAMTALK_VERSION;
     url += "&service=bearware";
     url += "&action=serverauth";
-    url += ACE_CString("&username=") + authusername.c_str();
-    url += ACE_CString("&accesstoken=") + authtoken.c_str();
+    url += std::string("&username=") + authusername.c_str();
+    url += std::string("&accesstoken=") + authtoken.c_str();
 
     MYTRACE(ACE_TEXT("Performing HTTP web authentication of %s\n"), useraccount.username.c_str());
     std::string utf8;
@@ -944,7 +944,7 @@ ErrorMsg ServerGuard::AddRegUser(const ServerUser& user, const UserAccount& user
     return ErrorMsg(TT_CMDERR_SUCCESS);
 }
 
-ErrorMsg ServerGuard::DeleteRegUser(const ServerUser& user, const ACE_TString& username)
+ErrorMsg ServerGuard::DeleteRegUser(const ServerUser& user, const tstring& username)
 {
     if( (user.GetUserType() & USERTYPE_ADMIN) == USERTYPE_NONE)
     {
@@ -1000,14 +1000,14 @@ ErrorMsg ServerGuard::GetUserBans(const ServerUser&  /*user*/, std::vector<Banne
     return ErrorMsg(TT_CMDERR_SUCCESS);
 }
 
-ErrorMsg ServerGuard::ChangeNickname(const ServerUser& user, const ACE_TString&  /*newnick*/)
+ErrorMsg ServerGuard::ChangeNickname(const ServerUser& user, const tstring&  /*newnick*/)
 {
     if((user.GetUserRights() & USERRIGHT_LOCKED_NICKNAME) == USERRIGHT_NONE)
         return ErrorMsg(TT_CMDERR_SUCCESS);
     return ErrorMsg(TT_CMDERR_NOT_AUTHORIZED);
 }
 
-ErrorMsg ServerGuard::ChangeStatus(const ServerUser& user, int  /*mode*/, const ACE_TString&  /*status*/)
+ErrorMsg ServerGuard::ChangeStatus(const ServerUser& user, int  /*mode*/, const tstring&  /*status*/)
 {
     if((user.GetUserRights() & USERRIGHT_LOCKED_STATUS) == USERRIGHT_NONE)
         return ErrorMsg(TT_CMDERR_SUCCESS);
