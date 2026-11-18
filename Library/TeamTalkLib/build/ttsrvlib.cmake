@@ -22,6 +22,7 @@ set (TTSRVLIB_HEADERS
   ${TEAMTALKLIB_ROOT}/teamtalk/PacketHandler.h
   ${TEAMTALKLIB_ROOT}/teamtalk/PacketHelper.h
   ${TEAMTALKLIB_ROOT}/teamtalk/PacketLayout.h
+  ${TEAMTALKLIB_ROOT}/teamtalk/PasswordHash.h
   ${TEAMTALKLIB_ROOT}/teamtalk/StreamHandler.h
   ${TEAMTALKLIB_ROOT}/teamtalk/TTAssert.h
   ${TEAMTALKLIB_ROOT}/teamtalk/User.h
@@ -45,6 +46,7 @@ set (TTSRVLIB_SOURCES
   ${TEAMTALKLIB_ROOT}/teamtalk/PacketHandler.cpp
   ${TEAMTALKLIB_ROOT}/teamtalk/PacketHelper.cpp
   ${TEAMTALKLIB_ROOT}/teamtalk/PacketLayout.cpp
+  ${TEAMTALKLIB_ROOT}/teamtalk/PasswordHash.cpp
   ${TEAMTALKLIB_ROOT}/teamtalk/StreamHandler.cpp
   ${TEAMTALKLIB_ROOT}/teamtalk/TTAssert.cpp
   ${TEAMTALKLIB_ROOT}/teamtalk/User.cpp

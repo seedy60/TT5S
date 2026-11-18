@@ -10,6 +10,19 @@ iOS Client
 -
 Server
 - Fixed channel rename accepting a name containing '/'
+- User account passwords are stored as Argon2id hashes instead of plain text
+- Passwords written by older versions are upgraded to Argon2id hashes on startup
+- Passwords are no longer written to the server log
+- Administrators can no longer view the passwords of user accounts
+- Encryption is now enabled by default in all servers, not only the Pro server
+  (it can be disabled with <encrypted>0</encrypted> in the settings file)
+- A self-signed certificate is generated if no server certificate is configured
+- Clients no longer need a certificate in order to connect to an encrypted server
+- Banning a connected user bans both the account and the network the user
+  connected from, and ends the user's session
+- The network prefix of such bans is set with <ban-ipv4-prefix> (default 24)
+  and <ban-ipv6-prefix> (default 64) in the server settings file. An IP-address
+  entered by an administrator is banned exactly as given, unless it is a CIDR
 
 Version 5.23.1, unreleased
 Desktop Client

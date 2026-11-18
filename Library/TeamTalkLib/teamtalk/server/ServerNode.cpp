@@ -530,7 +530,7 @@ int ServerNode::StartTimer(ServerTimer timer, timer_userdata userdata,
 {
     auto th = std::make_unique<TimerHandler>(*this, timer, userdata);
 
-    return m_timer_reactor->schedule_timer(th.release(), delay, interval);  // NOLINT(bugprone-unused-return-value)
+    return m_timer_reactor->schedule_timer(th.release(), nullptr, delay, interval);  // NOLINT(bugprone-unused-return-value)
 }
 
 int ServerNode::TimerEvent(uint32_t timer_event_id, long userdata)
@@ -654,6 +654,14 @@ int ServerNode::TimerEvent(uint32_t timer_event_id, long userdata)
         serveruser_t const src_user = GetUser(tm_data.src_userid, nullptr, false);
         if(src_user)
             src_user->ProcessCommandQueue(true);
+
+        return -1;
+    }
+    case TIMERSRV_DISCONNECT_ID :
+    {
+        timer_userdata tm_data;
+        tm_data.userdata = userdata;
+        CloseConnection(tm_data.src_userid);
 
         return -1;
     }
@@ -3187,6 +3195,20 @@ ErrorMsg ServerNode::UserLeaveChannel(int userid, int channelid)
     return ErrorMsg(TT_CMDERR_SUCCESS);
 }
 
+void ServerNode::CloseConnection(int userid)
+{
+    GUARD_OBJ(this, Lock());
+
+    serveruser_t const user = GetUser(userid, nullptr, false);
+    if (!user)
+        return;
+
+    ACE_HANDLE const h = user->ResetStreamHandle();
+    auto* const handler = h != ACE_INVALID_HANDLE ? m_tcp_reactor->find_handler(h) : nullptr;
+    if (handler)
+        handler->reactor()->remove_handler(handler, ACE_Event_Handler::ALL_EVENTS_MASK);
+}
+
 void ServerNode::UserDisconnected(int userid)
 {
     GUARD_OBJ(this, Lock());
@@ -3396,9 +3418,55 @@ ErrorMsg ServerNode::UserBan(int userid, int ban_userid, BannedUser ban)
     }
 
     ban.owner = banner->GetUsername();
-    err = m_srvguard->AddUserBan(*banner, *ban_user, ban.bantype);
-    if (banchan && err.Success())
-        AddBannedUserToChannel(ban);
+
+    if ((ban.bantype & BANTYPE_CHANNEL) != BANTYPE_NONE)
+    {
+        err = m_srvguard->AddUserBan(*banner, *ban_user, ban.bantype);
+        if (banchan && err.Success())
+            AddBannedUserToChannel(ban);
+    }
+    else
+    {
+        // Banning a logged-in user bans both the account and the network
+        // the client is connecting from. An IP-address ban alone is lifted
+        // by reconnecting through a VPN or proxy, and an account ban alone
+        // is lifted by creating another account.
+        if (!ban_user->GetUsername().empty())
+        {
+            BannedUser accountban;
+            accountban.bantype = BANTYPE_USERNAME;
+            accountban.username = ban_user->GetUsername();
+            accountban.nickname = ban_user->GetNickname();
+            accountban.owner = ban.owner;
+            err = m_srvguard->AddUserBan(*banner, accountban);
+        }
+
+        if (err.Success() && !ban_user->GetIpAddress().empty())
+        {
+            BannedUser networkban;
+            networkban.bantype = BANTYPE_IPADDR;
+            networkban.ipaddr = ban_user->GetIpAddress();
+            networkban.nickname = ban_user->GetNickname();
+            networkban.owner = ban.owner;
+            // An address alone is changed by reconnecting through a VPN
+            // or proxy, so the client's network is banned as well.
+            networkban = m_srvguard->WidenBanNetwork(networkban);
+            err = m_srvguard->AddUserBan(*banner, networkban);
+        }
+    }
+
+    if (err.Success() && ((ban.bantype & BANTYPE_CHANNEL) == BANTYPE_NONE))
+    {
+        // A server ban must also end the session, since a client is free to
+        // ignore 'kicked'. The socket is closed on a timer so that 'kicked'
+        // and 'loggedout' are flushed to the client first.
+        UserKick(0, ban_userid, 0, true);
+        timer_userdata tm_data = {};
+        tm_data.src_userid = uint16_t(ban_userid);
+        if (StartTimer(TIMERSRV_DISCONNECT_ID, tm_data,
+                       ACE_Time_Value(0, 250000)) < 0)
+            CloseConnection(ban_userid);
+    }
 
     if (err.Success() && ((m_properties.logevents & SERVERLOGEVENT_USER_BANNED) != SERVERLOGEVENT_NONE))
     {

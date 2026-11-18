@@ -26,6 +26,7 @@
 #include "bin/ttsrv/ServerXML.h"
 #include "codec/OpusEncoder.h" // OPUS_APPLICATION_AUDIO/OPUS_APPLICATION_VOIP
 #include "myace/MyACE.h"
+#include "teamtalk/PasswordHash.h"
 
 #include <array>
 #include <cstdio>
@@ -273,7 +274,9 @@ TEST_CASE("ServerXML User Accounts Write/Read")
         UserAccount adminRead;
         REQUIRE(xml.GetUser("admin", adminRead));
         REQUIRE(adminRead.username == ACE_TEXT("admin"));
-        REQUIRE(adminRead.passwd == ACE_TEXT("adminpass123"));
+        // Passwords are stored as Argon2id hashes, never in plain text.
+        REQUIRE(password::IsHashedPassword(UnicodeToUtf8(adminRead.passwd).c_str()));
+        REQUIRE(password::VerifyPassword("adminpass123", UnicodeToUtf8(adminRead.passwd).c_str()));
         REQUIRE(adminRead.usertype == USERTYPE_ADMIN);
         REQUIRE(adminRead.userrights == USERRIGHT_ALL);
         REQUIRE(adminRead.note == ACE_TEXT("Administrator account"));
@@ -288,7 +291,8 @@ TEST_CASE("ServerXML User Accounts Write/Read")
         UserAccount guestRead;
         REQUIRE(xml.GetUser("guest", guestRead));
         REQUIRE(guestRead.username == ACE_TEXT("guest"));
-        REQUIRE(guestRead.passwd == ACE_TEXT("guestpass"));
+        REQUIRE(password::VerifyPassword("guestpass", UnicodeToUtf8(guestRead.passwd).c_str()));
+        REQUIRE_FALSE(password::VerifyPassword("wrongpass", UnicodeToUtf8(guestRead.passwd).c_str()));
         REQUIRE(guestRead.usertype == USERTYPE_DEFAULT);
         REQUIRE(guestRead.userrights == USERRIGHT_DEFAULT);
         REQUIRE(guestRead.note == ACE_TEXT("Guest user"));
@@ -298,7 +302,7 @@ TEST_CASE("ServerXML User Accounts Write/Read")
         UserAccount specialRead;
         REQUIRE(xml.GetUser("special_user", specialRead));
         REQUIRE(specialRead.username == ACE_TEXT("special_user"));
-        REQUIRE(specialRead.passwd == ACE_TEXT("specialpass"));
+        REQUIRE(password::VerifyPassword("specialpass", UnicodeToUtf8(specialRead.passwd).c_str()));
         REQUIRE((specialRead.userrights & USERRIGHT_TRANSMIT_VOICE) != USERRIGHT_NONE);
         REQUIRE((specialRead.userrights & USERRIGHT_TRANSMIT_VIDEOCAPTURE) != USERRIGHT_NONE);
         REQUIRE(specialRead.abuse.n_cmds == 5);

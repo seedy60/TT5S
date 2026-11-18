@@ -78,6 +78,9 @@ namespace teamtalk {
         bool SetVoiceLogging(bool enable);
         bool GetVoiceLogging();
 
+        bool GetEncryption();
+        void SetEncryption(bool enabled);
+
         bool SetCertificateFile(const std::string& certfile);
         std::string GetCertificateFile();
         bool SetPrivateKeyFile(const std::string& keyfile);
@@ -169,6 +172,9 @@ namespace teamtalk {
         bool AuthenticateUser(UserAccount& user);
         bool GetUser(const std::string& username, UserAccount& user);
         void UpdateLastLogin(const UserAccount& user);
+        // Replaces passwords stored in plain text by older versions with
+        // Argon2id hashes. Returns true if the settings file must be saved.
+        bool UpgradePasswords();
 
         // Removes operator privileges for a specific channel ID from all users.
         bool CleanupChannelOperators(int deletedChannelID);
@@ -182,6 +188,13 @@ namespace teamtalk {
         bool IsUserBanned(const BannedUser& ban);
         void ClearUserBans();
         std::vector<BannedUser> GetUserBans();
+
+        // Prefix lengths used when a connected user is banned, so the
+        // ban covers the network the client connected from instead of a
+        // single address (which is easily changed using a VPN or proxy).
+        // An IP-address entered by an administrator is not widened.
+        int GetBanIPv4Prefix();
+        int GetBanIPv6Prefix();
         /********** </serverbans> ************/
 
         /******** <bearware-weblogin> *********/
@@ -194,6 +207,9 @@ namespace teamtalk {
     protected:
         bool UpdateFile() override;
     private:
+        // Set when UpdateFile() rewrote user accounts, since passwords
+        // are then hashed and the settings file must be saved.
+        bool m_usersrewritten = false;
         /**** Sections ****/
         tinyxml2::XMLElement* GetGeneralElement();
         tinyxml2::XMLElement* GetFileStorageElement();

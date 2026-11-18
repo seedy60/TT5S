@@ -27,6 +27,7 @@
 #include "settings/Settings.h"
 #include "myace/MyACE.h"
 #include "mystd/MyStd.h"
+#include "teamtalk/PasswordHash.h"
 
 #include <algorithm>
 #include <array>
@@ -73,6 +74,9 @@ namespace teamtalk{
                 ua.userrights |= USERRIGHT_TEXTMESSAGE_CHANNEL;
                 RemoveUser(UnicodeToUtf8(ua.username).c_str());
                 AddNewUser(ua);
+                // Passwords are hashed by AddNewUser(), so the file must
+                // be saved for the hashes to replace the plain text.
+                m_usersrewritten = true;
             }
             return SetFileVersion(TEAMTALK_XML_VERSION);
         }
@@ -402,6 +406,18 @@ namespace teamtalk{
         if(parent != nullptr)
             GetString(parent, "privatekey-file", s);
         return s;
+    }
+
+    bool ServerXML::GetEncryption()
+    {
+        // Encryption is the default so servers are secure unless the
+        // administrator explicitly disables it.
+        return GetValueBool(true, "general/encrypted", true);
+    }
+
+    void ServerXML::SetEncryption(bool enabled)
+    {
+        SetValueBool("general/encrypted", enabled);
     }
 
     void ServerXML::SetCertificateAuthFile(const std::string& cafile)
@@ -1264,6 +1280,29 @@ namespace teamtalk{
         }
         return result;
     }
+
+    int ServerXML::GetBanIPv4Prefix()
+    {
+        // A single IPv4-address is replaced by reconnecting through a VPN
+        // or proxy, so a ban of a connected user covers the local network
+        // block. Use 32 to ban only the exact address.
+        int prefix = 24;
+        XMLElement* parent = GetGeneralElement();
+        if(parent != nullptr)
+            GetInteger(parent, "ban-ipv4-prefix", prefix);
+        return std::clamp(prefix, 0, 32);
+    }
+
+    int ServerXML::GetBanIPv6Prefix()
+    {
+        // A /64 is the smallest network assigned to a client, and clients
+        // change address within it (privacy extensions).
+        int prefix = 64;
+        XMLElement* parent = GetGeneralElement();
+        if(parent != nullptr)
+            GetInteger(parent, "ban-ipv6-prefix", prefix);
+        return std::clamp(prefix, 0, 128);
+    }
     /********** </serverbans> ************/
 
     /******** <bearware-weblogin> *********/
@@ -1284,6 +1323,21 @@ namespace teamtalk{
     /******** </bearware-weblogin> *********/
 
     /******* <users> ******/
+
+    // Returns the value to store in the settings file. Passwords are
+    // never written in plain text: plain text passwords are replaced by
+    // an Argon2id hash and already hashed passwords are kept as-is.
+    static std::string StoredPassword(const ACE_TString& passwd)
+    {
+        if(passwd.empty())
+            return std::string();
+
+        std::string const utf8 = UnicodeToUtf8(passwd).c_str();
+        if(password::IsHashedPassword(utf8))
+            return utf8;
+        return password::HashPassword(utf8);
+    }
+
     void ServerXML::AddNewUser(const UserAccount& user)
     {
         XMLElement* users = GetUsersElement();
@@ -1292,7 +1346,7 @@ namespace teamtalk{
 
         XMLElement* userElement = m_xmlDocument.NewElement("user");
         PutString(userElement, "username", UnicodeToUtf8(user.username).c_str());
-        PutString(userElement, "password", UnicodeToUtf8(user.passwd).c_str());
+        PutString(userElement, "password", StoredPassword(user.passwd).c_str());
         PutInteger(userElement, "user-type", static_cast<int>(user.usertype));
         PutInteger(userElement, "user-rights", static_cast<int>(user.userrights));
         PutString(userElement, "note", UnicodeToUtf8(user.note).c_str());
@@ -1424,9 +1478,19 @@ namespace teamtalk{
         if(!GetUser(userElement, int_user))
             return false;
 
+        std::string const password = UnicodeToUtf8(user.passwd).c_str();
+        std::string const storedpassword = UnicodeToUtf8(int_user.passwd).c_str();
+
         if(int_user.username == user.username &&
-           int_user.passwd == user.passwd)
+           password::VerifyPassword(password, storedpassword))
         {
+            // Upgrade a password written in plain text by an older
+            // version. UpdateLastLogin() writes the account back to the
+            // settings file, so the hash is persisted immediately.
+            if(!storedpassword.empty() &&
+               !password::IsHashedPassword(storedpassword))
+                int_user.passwd = Utf8ToUnicode(password::HashPassword(password).c_str());
+
             user = int_user;
             if(user.usertype == USERTYPE_ADMIN)
                 user.userrights = USERRIGHT_ALL;
@@ -1435,6 +1499,36 @@ namespace teamtalk{
             return true;
         }
         return false;
+    }
+
+    bool ServerXML::UpgradePasswords()
+    {
+        useraccounts_t users;
+        UserAccount user;
+        int index = 0;
+        while(GetNextUser(index, user))
+        {
+            users.push_back(user);
+            user = UserAccount(); //reset
+            index++;
+        }
+
+        bool changed = false;
+        for(const auto& account : users)
+        {
+            if(account.passwd.empty() ||
+               password::IsHashedPassword(UnicodeToUtf8(account.passwd).c_str()))
+                continue;
+
+            RemoveUser(UnicodeToUtf8(account.username).c_str());
+            AddNewUser(account); // AddNewUser() hashes the plain text password
+            changed = true;
+        }
+
+        // UpdateFile() also rewrites user accounts and thereby replaces
+        // plain text passwords with hashes, so the file must be saved in
+        // that case too.
+        return changed || m_usersrewritten;
     }
 
     XMLElement* ServerXML::GetUser(const std::string& username)

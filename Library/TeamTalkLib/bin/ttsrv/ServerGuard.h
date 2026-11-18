@@ -92,6 +92,7 @@ namespace teamtalk {
 
         ErrorMsg AddUserBan(const ServerUser& user, const ServerUser& banee, BanTypes bantype) override;
         ErrorMsg AddUserBan(const ServerUser& user, const BannedUser& ban) override;
+        BannedUser WidenBanNetwork(BannedUser ban) override;
         ErrorMsg RemoveUserBan(const ServerUser& user, const BannedUser& ban) override;
         ErrorMsg GetUserBans(const ServerUser& user, std::vector<BannedUser>& bans) override;
 

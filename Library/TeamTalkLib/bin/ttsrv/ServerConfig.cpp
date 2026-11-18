@@ -40,7 +40,17 @@
 #include <ace/INET_Addr.h>
 #include <ace/OS.h>
 
+#if defined(ENABLE_ENCRYPTION)
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/rand.h>
+#include <openssl/rsa.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
+#endif
+
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -569,7 +579,9 @@ void RunWizard(teamtalk::ServerXML& xmlSettings)
             {
                 cout << "User #" << count + 1 << endl;
                 cout << "Username: " << user.username << endl;
-                cout << "Password: " << user.passwd << endl;
+                // Passwords are stored as Argon2id hashes and are never
+                // displayed.
+                cout << "Password: ********" << endl;
                 switch(user.usertype)
                 {
                 case USERTYPE_DEFAULT :
@@ -846,7 +858,159 @@ bool SaveServerProperties(teamtalk::ServerXML& xmlSettings, const teamtalk::Serv
 }
 
 
-#if defined(ENABLE_TEAMTALKPRO)
+#if defined(ENABLE_ENCRYPTION)
+
+namespace {
+
+bool WritePemFile(const std::string& filename, bool privatekey, EVP_PKEY* pkey, X509* cert)
+{
+    // Use a BIO rather than stdio FILE*. Handing a FILE* to a shared
+    // OpenSSL library on Windows requires OPENSSL_Applink and fails
+    // otherwise.
+    BIO* bio = BIO_new_file(filename.c_str(), "wb");
+    if(bio == nullptr)
+        return false;
+
+    bool const ok = privatekey ?
+        PEM_write_bio_PrivateKey(bio, pkey, nullptr, nullptr, 0, nullptr, nullptr) == 1 :
+        PEM_write_bio_X509(bio, cert) == 1;
+
+    BIO_free(bio); // also closes the file
+    if(!ok)
+        return false;
+
+    if(privatekey)
+    {
+#if !defined(WIN32)
+        // The private key must not be readable by other users.
+        chmod(filename.c_str(), S_IRUSR | S_IWUSR);
+#endif
+    }
+    return true;
+}
+
+void AddCertificateExtension(X509V3_CTX* ctx, X509* cert, int nid, const char* value)
+{
+    // The context supplies the certificate itself, which extensions such
+    // as subject/authority key identifier are computed from.
+    X509_EXTENSION* ext = X509V3_EXT_conf_nid(nullptr, ctx, nid,
+                                              const_cast<char*>(value));
+    if(ext != nullptr)
+    {
+        X509_add_ext(cert, ext, -1);
+        X509_EXTENSION_free(ext);
+    }
+}
+
+bool GenerateSelfSignedCertificate(const std::string& certfile,
+                                  const std::string& keyfile,
+                                  const std::string& commonname)
+{
+    EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+    if(pctx == nullptr)
+        return false;
+
+    EVP_PKEY* pkey = nullptr;
+    bool ok = EVP_PKEY_keygen_init(pctx) > 0 &&
+        EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, 2048) > 0 &&
+        EVP_PKEY_keygen(pctx, &pkey) > 0;
+    EVP_PKEY_CTX_free(pctx);
+
+    if(!ok || pkey == nullptr)
+        return false;
+
+    X509* cert = X509_new();
+    ok = false;
+    if(cert != nullptr)
+    {
+        std::array<unsigned char, 8> serialseed{};
+        RAND_bytes(serialseed.data(), static_cast<int>(serialseed.size()));
+        long serial = 0;
+        for(unsigned char b : serialseed)
+            serial = (serial << 8) | b;
+        serial &= 0x7FFFFFFFL;
+
+        ok = X509_set_version(cert, 2) == 1 &&
+            ASN1_INTEGER_set(X509_get_serialNumber(cert), serial) == 1 &&
+            X509_gmtime_adj(X509_getm_notBefore(cert), -60) != nullptr &&
+            X509_gmtime_adj(X509_getm_notAfter(cert), 60L * 60 * 24 * 365 * 10) != nullptr &&
+            X509_set_pubkey(cert, pkey) == 1;
+    }
+
+    if(ok)
+    {
+        X509_NAME* name = X509_get_subject_name(cert);
+        ok = X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_UTF8,
+                                       reinterpret_cast<const unsigned char*>(commonname.c_str()),
+                                       -1, -1, 0) == 1 &&
+            X509_set_issuer_name(cert, name) == 1;
+    }
+
+    if(ok)
+    {
+        X509V3_CTX ctx;
+        X509V3_set_ctx_nodb(&ctx);
+        X509V3_set_ctx(&ctx, cert, cert, nullptr, nullptr, 0);
+
+        AddCertificateExtension(&ctx, cert, NID_basic_constraints, "critical,CA:FALSE");
+        AddCertificateExtension(&ctx, cert, NID_key_usage, "critical,digitalSignature,keyEncipherment");
+        AddCertificateExtension(&ctx, cert, NID_ext_key_usage, "serverAuth");
+        AddCertificateExtension(&ctx, cert, NID_subject_key_identifier, "hash");
+        AddCertificateExtension(&ctx, cert, NID_authority_key_identifier, "keyid:always");
+        ok = X509_sign(cert, pkey, EVP_sha256()) > 0;
+    }
+
+    if(ok)
+        ok = WritePemFile(certfile, false, pkey, cert) &&
+             WritePemFile(keyfile, true, pkey, cert);
+
+    if(cert != nullptr)
+        X509_free(cert);
+    EVP_PKEY_free(pkey);
+    return ok;
+}
+
+// Returns the certificate and private key to use. If none is configured,
+// a self-signed certificate is generated next to the settings file so
+// encryption works without the administrator providing certificates.
+bool ResolveCertificateFiles(teamtalk::ServerXML& xmlSettings,
+                             ACE_TString& certfile, ACE_TString& keyfile)
+{
+    if(!certfile.empty() || !keyfile.empty())
+        return !certfile.empty() && !keyfile.empty(); // both or none
+
+    std::filesystem::path const settingspath(xmlSettings.GetFileName().c_str());
+    std::string stem = settingspath.stem().string();
+    if(stem.empty())
+        stem = "tt5srv";
+
+    std::filesystem::path const certpath = settingspath.parent_path() / (stem + "-cert.pem");
+    std::filesystem::path const keypath = settingspath.parent_path() / (stem + "-key.pem");
+
+    std::error_code ec;
+    if(!std::filesystem::exists(certpath, ec) || !std::filesystem::exists(keypath, ec))
+    {
+        std::string commonname = "TeamTalk Server";
+        ACE_TString const servername = Utf8ToUnicode(xmlSettings.GetServerName().c_str());
+        if(!servername.empty())
+            commonname = UnicodeToUtf8(servername).c_str();
+
+        if(!GenerateSelfSignedCertificate(certpath.string(), keypath.string(), commonname))
+            return false;
+
+        tostringstream oss;
+        oss << "Generated self-signed certificate for encryption: "
+            << certpath.string().c_str();
+        TT_LOG(oss.str().c_str());
+    }
+
+    certfile = Utf8ToUnicode(certpath.string().c_str());
+    keyfile = Utf8ToUnicode(keypath.string().c_str());
+    return true;
+}
+
+} // namespace
+
 bool SetupEncryption(teamtalk::ServerNode& servernode, teamtalk::ServerXML& xmlSettings)
 {
     ACE_TString certfile;
@@ -859,6 +1023,12 @@ bool SetupEncryption(teamtalk::ServerNode& servernode, teamtalk::ServerXML& xmlS
     cafile = Utf8ToUnicode(xmlSettings.GetCertificateAuthFile().c_str());
     cadir = Utf8ToUnicode(xmlSettings.GetCertificateAuthDir().c_str());
 
+    if(!ResolveCertificateFiles(xmlSettings, certfile, privfile))
+    {
+        TT_SYSLOG("Failed to create a certificate for encryption. Configure a server certificate and private key in the settings file.");
+        return false;
+    }
+
     ACE_SSL_Context *context = servernode.SetupEncryptionContext();
     if (context == nullptr)
     {
@@ -869,19 +1039,16 @@ bool SetupEncryption(teamtalk::ServerNode& servernode, teamtalk::ServerXML& xmlS
     if (context->set_mode(ACE_SSL_Context::SSLv23) < 0)
         return false;
 
-    if ((!certfile.empty()) && (!privfile.empty()))
+    if (context->certificate(UnicodeToLocal(certfile).c_str(), SSL_FILETYPE_PEM) < 0)
     {
-        if (context->certificate(UnicodeToLocal(certfile).c_str(), SSL_FILETYPE_PEM) < 0)
-        {
-            TT_SYSLOG("Failed to load certificate file. Check the settings file.");
-            return false;
-        }
+        TT_SYSLOG("Failed to load certificate file. Check the settings file.");
+        return false;
+    }
 
-        if (context->private_key(UnicodeToLocal(privfile).c_str(), SSL_FILETYPE_PEM) < 0)
-        {
-            TT_SYSLOG("Failed to load private key file. Check the settings file.");
-            return false;
-        }
+    if (context->private_key(UnicodeToLocal(privfile).c_str(), SSL_FILETYPE_PEM) < 0)
+    {
+        TT_SYSLOG("Failed to load private key file. Check the settings file.");
+        return false;
     }
 
     if ((!cafile.empty()) || (!cadir.empty()))
@@ -894,12 +1061,17 @@ bool SetupEncryption(teamtalk::ServerNode& servernode, teamtalk::ServerXML& xmlS
         }
     }
 
+    // Authenticating the client with a certificate is optional. The
+    // server certificate is what enables encryption.
     context->set_verify_peer(static_cast<int>(xmlSettings.GetCertificateVerify(false)),
                              static_cast<int>(xmlSettings.GetCertificateVerifyOnce(true)),
                              xmlSettings.GetCertificateVerifyDepth(0));
     return true;
 }
 
+#endif /* ENABLE_ENCRYPTION */
+
+#if defined(ENABLE_TEAMTALKPRO)
 bool HasBearWareWebLogin(teamtalk::ServerXML& xmlSettings)
 {
     int i = 0;

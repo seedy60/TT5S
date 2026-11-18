@@ -37,8 +37,11 @@ bool ReadServerProperties(teamtalk::ServerXML& xmlSettings, teamtalk::ServerSett
 bool SaveServerProperties(teamtalk::ServerXML& xmlSettings, const teamtalk::ServerSettings& properties,
                           const teamtalk::statchannels_t& channels);
 
-#if defined(ENABLE_TEAMTALKPRO)
+#if defined(ENABLE_ENCRYPTION)
 bool SetupEncryption(teamtalk::ServerNode& servernode, teamtalk::ServerXML& xmlSettings);
+#endif
+
+#if defined(ENABLE_TEAMTALKPRO)
 bool HasBearWareWebLogin(teamtalk::ServerXML& xmlSettings);
 bool LoginBearWare(teamtalk::ServerXML& xmlSettings);
 #endif

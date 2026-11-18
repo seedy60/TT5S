@@ -31,8 +31,11 @@ if (MSVC)
     -D_CRT_NONSTDC_NO_DEPRECATE
     -D_WINSOCK_DEPRECATED_NO_WARNINGS)
 
-  # Use for building TeamTalk toolchain
-  set (PLATFORMTOOLSET "/property:PlatformToolset=v145")
+  # Dependencies built with msbuild (e.g. ACE) use the generator's toolset
+  # instead of a hardcoded one.
+  if (CMAKE_VS_PLATFORM_TOOLSET)
+    set (PLATFORMTOOLSET "/property:PlatformToolset=${CMAKE_VS_PLATFORM_TOOLSET}")
+  endif()
 
 else()
   set (COMPILE_FLAGS -Wno-deprecated-declarations)

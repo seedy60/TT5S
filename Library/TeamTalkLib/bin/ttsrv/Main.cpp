@@ -407,20 +407,31 @@ int RunServer(
     }
     channels.clear();
 
+    // Encryption is enabled by default. Clients do not need a certificate
+    // to connect and a self-signed server certificate is generated on the
+    // first start if the settings file does not specify one.
     bool encrypted = false;
-#if defined(ENABLE_TEAMTALKPRO)
-    encrypted = (!xmlSettings.GetCertificateFile().empty()) && (!xmlSettings.GetPrivateKeyFile().empty());
-    if (encrypted && !SetupEncryption(servernode, xmlSettings))
-        return -1;
+#if defined(ENABLE_ENCRYPTION)
+    if (xmlSettings.GetEncryption())
+    {
+        if (!SetupEncryption(servernode, xmlSettings))
+        {
+            TT_SYSLOG(ACE_TEXT("Failed to enable encryption. Refusing to start an unencrypted server."));
+            return -1;
+        }
+        encrypted = true;
+    }
+    else
+    {
+        TT_SYSLOG(ACE_TEXT("Encryption is disabled in the settings file. Data is sent unencrypted."));
+    }
 #endif
 
     ACE_TString systemid = SERVER_WELCOME;
 #if defined(ENABLE_TEAMTALKPRO)
     systemid = Utf8ToUnicode(xmlSettings.GetSystemID(UnicodeToUtf8(systemid).c_str()).c_str());
-    if (!servernode.StartServer(encrypted, systemid))
-#else
-    if (!servernode.StartServer(false, systemid))
 #endif
+    if (!servernode.StartServer(encrypted, systemid))
     {
         std::array<ACE_TCHAR, 1024> error_msg{};
         if(bindip.empty())
@@ -778,6 +789,14 @@ int ParseArguments(int argc, ACE_TCHAR* argv[]
     }
 
     RemoveFacebookLogins(xmlSettings);
+
+    if (xmlSettings.UpgradePasswords())
+    {
+        if (xmlSettings.SaveFile())
+            TT_SYSLOG(ACE_TEXT("Upgraded user account passwords to Argon2id hashes."));
+        else
+            TT_SYSLOG(ACE_TEXT("Failed to save upgraded user account passwords."));
+    }
 
 #if defined(ENABLE_TEAMTALKPRO)
     // -tokenlogin foo@bearware.dk:fedeabe0912345

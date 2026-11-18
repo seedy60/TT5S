@@ -28,6 +28,7 @@
 #include "teamtalk/CodecCommon.h"
 #include "teamtalk/TTAssert.h"
 
+#include <array>
 #include <cstdio>
 #include <filesystem>
 #include <queue>
@@ -38,6 +39,35 @@
 #endif
 
 using namespace teamtalk;
+
+#if defined(_DEBUG)
+// Command lines are written to the server log, so the value of password
+// properties (user account and channel passwords) is replaced before a
+// command line is logged.
+static ACE_TString RedactPasswords(const ACE_TString& cmdline)
+{
+    static const std::array<ACE_TString, 2> keys = {
+        ACE_TString(ACE_TEXT(" password=\"")),
+        ACE_TString(ACE_TEXT(" op-password=\"")) };
+
+    ACE_TString result = cmdline;
+    for(const auto& key : keys)
+    {
+        size_t start = 0;
+        while((start = result.find(key, start)) != ACE_TString::npos)
+        {
+            size_t const value_start = start + key.length();
+            size_t const value_end = result.find(ACE_TString(ACE_TEXT("\"")), value_start);
+            if(value_end == ACE_TString::npos)
+                break;
+            result = result.substr(0, value_start) +
+                ACE_TString(ACE_TEXT("***")) + result.substr(value_end);
+            start = value_start + 3;
+        }
+    }
+    return result;
+}
+#endif /* _DEBUG */
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-do-while)
 
@@ -119,11 +149,8 @@ bool ServerUser::SendData(ACE_Message_Queue_Base& msg_queue)
                     GetUserID(), GetNickname().c_str());
             return false;
         }
-#if defined(UNICODE)
-        MYTRACE(ACE_TEXT("SERVERUSER > #%d: %s"), GetUserID(), Utf8ToUnicode(m_sendbuf.c_str()).c_str());
-#else
-        MYTRACE(ACE_TEXT("SERVERUSER > #%d: %s"), GetUserID(), m_sendbuf.c_str());
-#endif
+        MYTRACE(ACE_TEXT("SERVERUSER > #%d: %s"), GetUserID(),
+                RedactPasswords(Utf8ToUnicode(m_sendbuf.c_str())).c_str());
         m_sendbuf.clear();
     }
     return true;
@@ -233,12 +260,7 @@ bool ServerUser::ProcessCommandQueue(bool clearsuspended)
 ServerUser::CmdProcessing ServerUser::ProcessCommand(const ACE_CString& cmdline, bool was_suspended)
 {
     MYTRACE(ACE_TEXT("SERVERUSER < #%d: %s"), GetUserID(),
-#if defined(UNICODE)
-        Utf8ToUnicode(cmdline.c_str()).c_str()
-#else
-        cmdline.c_str()
-#endif
-    );
+            RedactPasswords(Utf8ToUnicode(cmdline.c_str())).c_str());
 
     ACE_CString tmp_cmd;
     if(!GetCmd(cmdline, tmp_cmd))
@@ -868,7 +890,8 @@ ErrorMsg ServerUser::HandleNewUserAccount(const mstrings_t& properties)
 {
     UserAccount account;
     GET_PROP_OR_RETURN(properties, TT_USERNAME, account.username);
-    GET_PROP_OR_RETURN(properties, TT_PASSWORD, account.passwd);
+    // An empty password means the existing password is kept.
+    GetProperty(properties, TT_PASSWORD, account.passwd);
     GET_PROP_OR_RETURN(properties, TT_USERTYPE, account.usertype);
     GetProperties(properties, account);
 
@@ -1303,7 +1326,9 @@ void ServerUser::DoServerUpdate(const ServerSettings& properties)
 static void AppendUserAccount(const UserAccount& useraccount, ACE_TString& command)
 {
     AppendProperty(TT_USERNAME, useraccount.username, command);
-    AppendProperty(TT_PASSWORD, useraccount.passwd, command);
+    // Passwords are never sent to clients. Administrators may not read
+    // user passwords, and a user already knows their own password.
+    AppendProperty(TT_PASSWORD, ACE_TString(), command);
     AppendProperty(TT_USERTYPE, useraccount.usertype, command);
     AppendProperty(TT_USERRIGHTS, useraccount.userrights, command);
     AppendProperty(TT_USERDATA, useraccount.userdata, command);

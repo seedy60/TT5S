@@ -73,7 +73,8 @@ namespace teamtalk {
         TIMERSRV_DESKTOPPACKET_RTX_TIMEOUT_ID      = 3,
         TIMERSRV_START_DESKTOPTX_ID                = 4,
         TIMERSRV_CLOSE_DESKTOPSESSION_ID           = 5,
-        TIMERSRV_COMMAND_RESUME_ID                 = 6
+        TIMERSRV_COMMAND_RESUME_ID                 = 6,
+        TIMERSRV_DISCONNECT_ID                     = 7
     };
 
     class ServerNodeListener;
@@ -264,6 +265,7 @@ namespace teamtalk {
         ErrorMsg UserUpdate(int userid);
         ErrorMsg UserMove(int userid, int moveuserid, int channelid);
         void UserDisconnected(int userid);
+        void CloseConnection(int userid);
         ErrorMsg UserOpDeOp(int userid, int channelid, //op user in a channel
                             const ACE_TString& oppasswd, int op_userid, bool op); 
         ErrorMsg UserKick(int userid, int kick_userid, int chanid, bool force_kick);
@@ -492,6 +494,9 @@ namespace teamtalk {
 
         virtual ErrorMsg AddUserBan(const ServerUser& banner, const ServerUser& banee, BanTypes bantype) = 0;
         virtual ErrorMsg AddUserBan(const ServerUser& banner, const BannedUser& ban) = 0;
+        // Widen an IP-address ban to a network, e.g. when banning a
+        // connected user. Administrator-entered bans are not widened.
+        virtual BannedUser WidenBanNetwork(BannedUser ban) { return ban; }
         virtual ErrorMsg RemoveUserBan(const ServerUser& user, const BannedUser& ban) = 0;
         virtual ErrorMsg GetUserBans(const ServerUser& user, std::vector<BannedUser>& bans) = 0;
 

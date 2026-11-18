@@ -35,6 +35,8 @@
 #include "teamtalk/server/ServerUser.h"
 #include "teamtalk/TTAssert.h"
 
+#include <ace/OS_NS_sys_socket.h>
+
 #include <cassert>
 #include <set>
 #include <sstream>
@@ -54,6 +56,43 @@ using tostringstream = std::ostringstream;
 static ACE_TString LogPrepare(const ACE_TString& str)
 {
     return PrepareString(str);
+}
+
+// Widen an IP-address to the network the client connected from, since a
+// single address is changed by reconnecting through a VPN or proxy.
+// Addresses that already contain a prefix ("192.168.0.0/24") are kept.
+static ACE_TString BanNetworkAddress(const ACE_TString& ipaddr,
+                                     int ipv4prefix, int ipv6prefix)
+{
+    if(ipaddr.empty() ||
+       ipaddr.find(ACE_TString(ACE_TEXT("/"))) != ACE_TString::npos)
+        return ipaddr;
+
+    int const af = InetAddrFamily(ipaddr);
+    uint32_t prefix = 0;
+    uint32_t maxprefix = 0;
+    switch(af)
+    {
+    case AF_INET :
+        prefix = static_cast<uint32_t>(ipv4prefix);
+        maxprefix = 32;
+        break;
+    case AF_INET6 :
+        prefix = static_cast<uint32_t>(ipv6prefix);
+        maxprefix = 128;
+        break;
+    default :
+        return ipaddr;
+    }
+
+    if(prefix == 0 || prefix >= maxprefix)
+        return ipaddr;
+
+    ACE_TString const network = INetAddrNetwork(ipaddr, prefix);
+    if(network.empty())
+        return ipaddr;
+
+    return network + ACE_TString(ACE_TEXT("/")) + I2String(static_cast<int64_t>(prefix));
 }
 
 ServerGuard::ServerGuard(ServerXML& settings)
@@ -913,6 +952,9 @@ ErrorMsg ServerGuard::GetRegUsers(const ServerUser&  /*user*/, useraccounts_t& u
     UserAccount useracc;
     while(m_settings.GetNextUser(i, useracc))
     {
+        // Administrators may not read user passwords. An empty password
+        // means "keep the existing password" when the account is updated.
+        useracc.passwd.clear();
         users.push_back(useracc);
         i++;
         useracc = UserAccount(); //reset
@@ -927,9 +969,19 @@ ErrorMsg ServerGuard::AddRegUser(const ServerUser& user, const UserAccount& user
         return ErrorMsg(TT_CMDERR_NOT_AUTHORIZED);
     }
 
+    UserAccount account = useraccount;
+    if(account.passwd.empty())
+    {
+        // Administrators cannot read passwords, so an empty password
+        // means the existing password must be kept.
+        UserAccount existing;
+        if(m_settings.GetUser(UnicodeToUtf8(account.username).c_str(), existing))
+            account.passwd = existing.passwd;
+    }
+
     //ensure no dublicates
-    m_settings.RemoveUser(UnicodeToUtf8(useraccount.username).c_str());
-    m_settings.AddNewUser(useraccount);
+    m_settings.RemoveUser(UnicodeToUtf8(account.username).c_str());
+    m_settings.AddNewUser(account);
 
     //TODO: Separate log event
     tostringstream oss;
@@ -976,11 +1028,18 @@ ErrorMsg ServerGuard::AddUserBan(const ServerUser&  /*banner*/, const BannedUser
 {
     // channel bans are stored in static channels
     if ((ban.bantype & BANTYPE_CHANNEL) == BANTYPE_NONE)
-    {
-        m_settings.AddUserBan(ban);
-    }
+        m_settings.AddUserBan(ban); // the address is stored as given
 
     return ErrorMsg(TT_CMDERR_SUCCESS);
+}
+
+BannedUser ServerGuard::WidenBanNetwork(BannedUser ban)
+{
+    if((ban.bantype & BANTYPE_IPADDR) != BANTYPE_NONE)
+        ban.ipaddr = BanNetworkAddress(ban.ipaddr,
+                                       m_settings.GetBanIPv4Prefix(),
+                                       m_settings.GetBanIPv6Prefix());
+    return ban;
 }
 
 ErrorMsg ServerGuard::RemoveUserBan(const ServerUser&  /*user*/, const BannedUser& ban)

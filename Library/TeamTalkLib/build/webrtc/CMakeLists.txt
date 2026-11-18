@@ -64,7 +64,9 @@ if (MSVC)
     file (TO_NATIVE_PATH ${DEPOTTOOLS_DIR} DEPOTTOOLS_DIR_NATIVE)
     configure_file(${CMAKE_CURRENT_LIST_DIR}/depottools-win.bat_sample ${CMAKE_CURRENT_BINARY_DIR}/depottools-win.bat @ONLY)
 
-    if (NOT EXISTS ${WEBRTC_SOURCE_ROOT})
+    # The directory exists (empty) after the first configure, so check for
+    # a checkout rather than for the directory itself.
+    if (NOT EXISTS ${WEBRTC_SOURCE_ROOT}/.git)
       message (WARNING "WebRTC is not present in ${WEBRTC_SOURCE_ROOT}. Downloading... This takes a loooong time")
       file(MAKE_DIRECTORY ${WEBRTC_FETCH_PATH})
       set (WEBRTC_DOWNLOAD_CMD ${CMAKE_CURRENT_BINARY_DIR}/depottools-win.bat)
@@ -232,7 +234,9 @@ else()
     #
     # Ensure HomeBrew path (/usr/local/bin) is not active when 'fetch'
     # is executed.
-    if (NOT EXISTS ${WEBRTC_SOURCE_ROOT})
+    # The directory exists (empty) after the first configure, so check for
+    # a checkout rather than for the directory itself.
+    if (NOT EXISTS ${WEBRTC_SOURCE_ROOT}/.git)
       message (WARNING "WebRTC is not present in ${WEBRTC_SOURCE_ROOT}. Downloading... This takes a loooong time")
       file(MAKE_DIRECTORY ${WEBRTC_FETCH_PATH})
       set (WEBRTC_DOWNLOAD_CMD1 ${DEPOTTOOLS_EXPORT} && cd ${WEBRTC_FETCH_PATH} && fetch --nohooks ${WEBRTC_REPO_NAME})
