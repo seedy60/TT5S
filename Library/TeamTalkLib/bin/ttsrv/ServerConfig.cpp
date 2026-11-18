@@ -70,7 +70,7 @@ bool LoadConfig(teamtalk::ServerXML& xmlSettings, const tstring& cfgfile)
         std::error_code ec;
         tstring workdir = std::filesystem::current_path(ec).native().c_str();
         workdir += ACE_DIRECTORY_SEPARATOR_STR;
-        settings_path = workdir + ACE_TEXT(TEAMTALK_SETTINGSFILE);
+        settings_path = workdir + TTEXT(TEAMTALK_SETTINGSFILE);
     }
     else settings_path = cfgfile;
 
@@ -83,10 +83,10 @@ bool LoadConfig(teamtalk::ServerXML& xmlSettings, const tstring& cfgfile)
             if(xmlSettings.HasErrors())
             {
                 tstring const errmsg = Utf8ToUnicode(xmlSettings.GetError().c_str());
-                osErr << ACE_TEXT("Unable to read ") << settings_path.c_str() << ACE_TEXT(". ") << errmsg.c_str() << endl;
+                osErr << TTEXT("Unable to read ") << settings_path.c_str() << TTEXT(". ") << errmsg.c_str() << endl;
             }
             else
-                osErr << ACE_TEXT("Unable to open file ") << settings_path.c_str() << ACE_TEXT(".");
+                osErr << TTEXT("Unable to open file ") << settings_path.c_str() << TTEXT(".");
             TT_SYSLOG(osErr.str().c_str());
 
             return false;
@@ -97,7 +97,7 @@ bool LoadConfig(teamtalk::ServerXML& xmlSettings, const tstring& cfgfile)
     if(!xmlSettings.CreateFile(UnicodeToUtf8(settings_path).c_str()))
     {
         tostringstream osErr;
-        osErr << ACE_TEXT("Unable to create settings file ") << settings_path.c_str() << ACE_TEXT(".");
+        osErr << TTEXT("Unable to create settings file ") << settings_path.c_str() << TTEXT(".");
         TT_SYSLOG(osErr.str().c_str());
         return false;
     }
@@ -108,7 +108,7 @@ bool LoadConfig(teamtalk::ServerXML& xmlSettings, const tstring& cfgfile)
 void RemoveFacebookLogins(teamtalk::ServerXML& xmlSettings)
 {
     // remove all facebook logins
-    if (!VersionSameOrLater(Utf8ToUnicode(xmlSettings.GetFileVersion().c_str()), ACE_TEXT("5.2")))
+    if (!VersionSameOrLater(Utf8ToUnicode(xmlSettings.GetFileVersion().c_str()), TTEXT("5.2")))
     {
         bool removefb = false;
         bool fbfound = false;
@@ -116,8 +116,8 @@ void RemoveFacebookLogins(teamtalk::ServerXML& xmlSettings)
         UserAccount ua;
         while (xmlSettings.GetNextUser(index, ua))
         {
-            bool const fbpostfix = std::regex_search(ua.username.c_str(), BuildRegex(ACE_TEXT("@facebook.com")));
-            if (ua.username == ACE_TEXT("facebook") || fbpostfix)
+            bool const fbpostfix = std::regex_search(ua.username.c_str(), BuildRegex(TTEXT("@facebook.com")));
+            if (ua.username == TTEXT("facebook") || fbpostfix)
             {
                 fbfound = true;
                 if (!removefb)
@@ -623,8 +623,8 @@ void RunWizard(teamtalk::ServerXML& xmlSettings)
             }
 
             cout << "Creating BearWare.dk web-login account." << endl;
-            user.username = ACE_TEXT( WEBLOGIN_BEARWARE_USERNAME );
-            user.passwd = ACE_TEXT("");
+            user.username = TTEXT( WEBLOGIN_BEARWARE_USERNAME );
+            user.passwd = TTEXT("");
             ConfigureUserAccount(user, xmlSettings);
             break;
 #endif /* ENABLE_TEAMTALKPRO */
@@ -906,10 +906,10 @@ bool HasBearWareWebLogin(teamtalk::ServerXML& xmlSettings)
     UserAccount ua;
     while (xmlSettings.GetNextUser(i++, ua))
     {
-        if (ua.username == ACE_TEXT(WEBLOGIN_BEARWARE_USERNAME))
+        if (ua.username == TTEXT(WEBLOGIN_BEARWARE_USERNAME))
             return true;
 
-        const tstring BWREGEX = ACE_TEXT(WEBLOGIN_BEARWARE_POSTFIX) + tstring(ACE_TEXT("$"));
+        const tstring BWREGEX = TTEXT(WEBLOGIN_BEARWARE_POSTFIX) + tstring(TTEXT("$"));
         if (std::regex_search(ua.username.c_str(), BuildRegex(BWREGEX.c_str())))
             return true;
     }
@@ -979,7 +979,7 @@ bool LoginBearWare(teamtalk::ServerXML& xmlSettings)
     switch (AuthBearWareAccount(bwid, token))
     {
     case WEBLOGIN_FAILED :
-        os.str(ACE_TEXT(""));
+        os.str(TTEXT(""));
         os << "Failed to authenticate BearWare.dk WebLogin: " << UnicodeToLocal(bwid).c_str();
         TT_SYSLOG(os.str().c_str());
         cout << "Reset BearWare.dk WebLogin credentials ";
@@ -992,7 +992,7 @@ bool LoginBearWare(teamtalk::ServerXML& xmlSettings)
         return false;
     case WEBLOGIN_SERVER_UNAVAILABLE :
     case WEBLOGIN_SERVER_INCOMPATIBLE :
-        os.str(ACE_TEXT(""));
+        os.str(TTEXT(""));
         os << "BearWare.dk WebLogin is currently unavailable. Continuing... ";
         TT_SYSLOG(os.str().c_str());
         std::this_thread::sleep_for(std::chrono::seconds(sleepTimeSec *= LOGIN_RETRY_BACKOFF_MULTIPLIER));
@@ -1119,7 +1119,7 @@ void MakeStaticChannels(teamtalk::ServerNode& servernode, const teamtalk::statch
             if(!create_chan)
             {
                 tostringstream os;
-                os << ACE_TEXT("Failed to create channel #") << chan.channelid << ACE_TEXT(" with name ") << chan.name.c_str();
+                os << TTEXT("Failed to create channel #") << chan.channelid << TTEXT(" with name ") << chan.name.c_str();
                 TT_SYSLOG(os.str().c_str());
                 continue;
             }
@@ -1134,7 +1134,7 @@ void MakeStaticChannels(teamtalk::ServerNode& servernode, const teamtalk::statch
                 if(servernode.AddFileToChannel(chan.files[i]).errorno != TT_CMDERR_SUCCESS)
                 {
                     tostringstream os;
-                    os << ACE_TEXT("Failed to add file ") << chan.files[i].filename.c_str() << ACE_TEXT(" to channel #") << chan.files[i].channelid;
+                    os << TTEXT("Failed to add file ") << chan.files[i].filename.c_str() << TTEXT(" to channel #") << chan.files[i].channelid;
                     TT_SYSLOG(os.str().c_str());
                 }
 
@@ -1143,7 +1143,7 @@ void MakeStaticChannels(teamtalk::ServerNode& servernode, const teamtalk::statch
                 if (!std::filesystem::exists(rootpath.c_str(), ec))
                 {
                     tostringstream os;
-                    os << ACE_TEXT("Failed to open channel #") << chan.files[i].channelid << ACE_TEXT(" file: ") << rootpath.c_str();
+                    os << TTEXT("Failed to open channel #") << chan.files[i].channelid << TTEXT(" file: ") << rootpath.c_str();
                     TT_SYSLOG(os.str().c_str());
                 }
                 else

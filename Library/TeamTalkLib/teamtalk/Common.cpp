@@ -57,7 +57,7 @@ namespace teamtalk
     bool UserAccount::IsWebLogin() const
     {
 #if defined(ENABLE_TEAMTALKPRO)
-        tstring const bwregex = ACE_TEXT(WEBLOGIN_BEARWARE_POSTFIX) + tstring(ACE_TEXT("$"));
+        tstring const bwregex = TTEXT(WEBLOGIN_BEARWARE_POSTFIX) + tstring(TTEXT("$"));
         return std::regex_search(username.c_str(), BuildRegex(bwregex.c_str()));
 #else
         return false;
@@ -82,7 +82,7 @@ namespace teamtalk
 
         if (((bantype & BANTYPE_IPADDR) != BANTYPE_NONE) && (!ipaddr.empty()))
         {
-            const tstring rgxsubnet = ACE_TEXT("^") ACE_TEXT("(.*)/(\\d+)") ACE_TEXT("$");
+            const tstring rgxsubnet = TTEXT("^") TTEXT("(.*)/(\\d+)") TTEXT("$");
 #if defined(UNICODE)
             std::wsmatch sm;
             std::wstring bannedip = ipaddr.c_str();
@@ -105,7 +105,7 @@ namespace teamtalk
             }
             else
             {
-                tstring const rgx = ACE_TEXT("^") + ipaddr + ACE_TEXT("$");
+                tstring const rgx = TTEXT("^") + ipaddr + TTEXT("$");
                 match &= std::regex_search(user.ipaddr.c_str(), BuildRegex(rgx.c_str()));
             }
         }
@@ -124,7 +124,7 @@ namespace teamtalk
     {
         ACE_Date_Time const date(tv);
         std::array<tchar, 200> buf{};
-        ACE_OS::sprintf(buf.data(), ACE_TEXT("%d/%.2d/%.2d %.2d:%.2d"),
+        ACE_OS::sprintf(buf.data(), TTEXT("%d/%.2d/%.2d %.2d:%.2d"),
                         static_cast<int>(date.year()), static_cast<int>(date.month()), static_cast<int>(date.day()), 
                         static_cast<int>(date.hour()), static_cast<int>(date.minute()));
         return buf.data();

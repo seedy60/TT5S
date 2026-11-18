@@ -70,7 +70,7 @@ struct ServerInstance
         {
             auto m = std::make_unique<ServerMonitor>();
             m->m_ttInst = this;
-            auto s = std::make_unique<ServerNode>(ACE_TEXT( TEAMTALK_VERSION ), &tcpReactor, &tcpReactor, &udpReactor, m.get());
+            auto s = std::make_unique<ServerNode>(TTEXT( TEAMTALK_VERSION ), &tcpReactor, &tcpReactor, &udpReactor, m.get());
             monitor = std::move(m);
             server = std::move(s);
 

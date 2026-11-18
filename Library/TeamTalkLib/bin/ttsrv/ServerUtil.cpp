@@ -153,7 +153,7 @@ void RotateLogfile(const tstring& cwd, const tstring& logname,
         if(curfile.length()>logname.length() &&
            curfile.substr(0, logname.length()) == logname)
         {
-            strings_t tokens = Tokenize(curfile, ACE_TEXT("."));
+            strings_t tokens = Tokenize(curfile, TTEXT("."));
             if(tokens.empty())
                 continue;
             int const val = String2I(tokens[tokens.size()-1]);
@@ -163,7 +163,7 @@ void RotateLogfile(const tstring& cwd, const tstring& logname,
 
     max++;
 
-    tstring const tmp_logname = logname + ACE_TEXT(".") + I2String(max);
+    tstring const tmp_logname = logname + TTEXT(".") + I2String(max);
 
     //rename from LogFile.log to LogFile.log.1
     std::error_code ec;
