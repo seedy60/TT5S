@@ -1,0 +1,4 @@
+# Patch files are applied with "git apply" on Linux and macOS as well, so they
+# must keep their LF line endings even in a Windows checkout (core.autocrlf).
+.gitattributes -text
+*.patch text eol=lf

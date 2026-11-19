@@ -1,5 +1,6 @@
 TEAMTALK_ROOT?=$(PWD)/..
 CONFIGTYPE?=release
+FEATURE_WEBRTC?=ON
 INSTALLDIR?=$(TEAMTALK_ROOT)/Build/install-$(CONFIGTYPE)-ios
 
 SHELL := /bin/bash
@@ -66,12 +67,18 @@ generic:
 ubuntu:
 	@echo May need to specify JAVA_HOME to help CMake find Java SDK
 	$(MAKE) BUILDDIR=build-$(CONFIGTYPE)-$(UBUNTUDIR) \
-	CMAKE_EXTRA+="-DCMAKE_POSITION_INDEPENDENT_CODE=ON" generic
+	CMAKE_EXTRA+="-DCMAKE_POSITION_INDEPENDENT_CODE=ON -DFEATURE_WEBRTC=$(FEATURE_WEBRTC)" generic
 
 ubuntu24:
 	$(MAKE) UBUNTUDIR=$@ ubuntu
 
 ubuntu26:
+	$(MAKE) UBUNTUDIR=$@ ubuntu
+
+debian12:
+	$(MAKE) UBUNTUDIR=$@ ubuntu
+
+debian13:
 	$(MAKE) UBUNTUDIR=$@ ubuntu
 
 rasp:
@@ -228,6 +235,68 @@ depend-ubuntu26:
 		ninja-build \
 		openjdk-25-jdk \
 		p7zip-full \
+		pkg-config \
+		python-is-python3 \
+		python3-pytest \
+		qt6-base-dev \
+		qt6-declarative-dev \
+		qt6-multimedia-dev \
+		qt6-speech-dev \
+		qt6-tools-dev \
+		qt6-tools-dev-tools \
+		wget \
+		xz-utils
+
+depend-debian12:
+	apt-get install \
+		autoconf \
+		cmake \
+		doxygen \
+		g++ \
+		junit5 \
+		libasound2-dev \
+		libglib2.0-dev \
+		libpcap-dev \
+		libpulse-dev \
+		libspeechd-dev \
+		libssl-dev \
+		libtool \
+		libxss-dev \
+		nasm \
+		ninja-build \
+		openjdk-17-jdk \
+		p7zip-full \
+		pkg-config \
+		python-is-python3 \
+		python3-pytest \
+		qt6-base-dev \
+		qt6-declarative-dev \
+		qt6-multimedia-dev \
+		qt6-speech-dev \
+		qt6-tools-dev \
+		qt6-tools-dev-tools \
+		wget \
+		xz-utils
+
+depend-debian13:
+	apt-get install \
+		autoconf \
+		cmake \
+		doxygen \
+		g++ \
+		junit5 \
+		libasound2-dev \
+		libglib2.0-dev \
+		libpcap-dev \
+		libpulse-dev \
+		libspeechd-dev \
+		libssl-dev \
+		libtool \
+		libxss-dev \
+		nasm \
+		ninja-build \
+		openjdk-25-jdk \
+		7zip \
 		pkg-config \
 		python-is-python3 \
 		python3-pytest \

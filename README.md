@@ -27,6 +27,7 @@ sections below install the platform specific tools and build the binaries:
 
 * [Windows](#building-for-windows)
 * [Ubuntu 24.04 and 26.04](#building-for-ubuntu-2404-and-2604)
+* [Debian 12 and 13](#building-for-debian-12-and-13)
 * [Raspberry Pi OS](#building-for-raspberry-pi-os)
 * [macOS](#building-for-macos)
 * [Android](#building-for-android)
@@ -78,6 +79,40 @@ Doxygen, NASM and the audio libraries with `apt`. The build is configured in
 `Build/build-release-ubuntu24` and produces `Server/tt5srv` and
 `Library/TeamTalk_DLL/libTeamTalk5.so`. `JAVA_HOME` may have to be set so
 CMake can find the Java SDK.
+
+### Building for Debian 12 and 13
+
+```
+sudo make -C Build depend-debian12    # or depend-debian13
+make -C Build debian12    # or debian13
+```
+
+The `depend-debian*` targets install the same toolchain as the Ubuntu ones,
+except that Debian 12 (bookworm) installs `openjdk-17-jdk` and `p7zip-full`,
+while Debian 13 (trixie) installs `openjdk-25-jdk` and `7zip`. The build is
+configured in `Build/build-release-debian12` and produces `Server/tt5srv`
+and `Library/TeamTalk_DLL/libTeamTalk5.so`, just like on Ubuntu. Raspberry Pi
+OS, covered below, is Debian 12 based and has its own `depend-raspios12`
+target.
+
+To build without installing any packages on the Debian host, use the
+containers in [Build/Docker](Build/Docker):
+
+```
+cd Build/Docker
+export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
+docker compose run --rm debian12 make -C /TeamTalk5/Build debian12 FEATURE_WEBRTC=OFF
+docker compose run --rm debian13 make -C /TeamTalk5/Build debian13 FEATURE_WEBRTC=OFF
+```
+
+The containers run as `LOCAL_UID`/`LOCAL_GID`, i.e. you, so the build directory
+and `Server/tt5srv` stay owned by your user and can be deleted without root.
+The compose file refuses to start until both are exported, since a container
+running as another user would otherwise leave files you cannot remove.
+
+`FEATURE_WEBRTC=OFF` skips WebRTC, whose build downloads a multi-gigabyte
+checkout of Chromium's WebRTC with depot_tools. Pass `FEATURE_WEBRTC=ON` (the
+default on a normal host install) to build the server with WebRTC support.
 
 ### Building for Raspberry Pi OS
 
@@ -155,10 +190,19 @@ be installed on the host:
 
 ```
 cd Build/Docker
-docker compose run --rm ubuntu24 make -C /TeamTalk5/Build ubuntu24
-docker compose run --rm ubuntu26 make -C /TeamTalk5/Build ubuntu26
+export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
+docker compose run --rm ubuntu24 make -C /TeamTalk5/Build ubuntu24 FEATURE_WEBRTC=OFF
+docker compose run --rm ubuntu26 make -C /TeamTalk5/Build ubuntu26 FEATURE_WEBRTC=OFF
+docker compose run --rm debian12 make -C /TeamTalk5/Build debian12 FEATURE_WEBRTC=OFF
+docker compose run --rm debian13 make -C /TeamTalk5/Build debian13 FEATURE_WEBRTC=OFF
 docker compose run --rm android make -C /TeamTalk5/Build android-all
 ```
+
+`LOCAL_UID` and `LOCAL_GID` make the container run as your user, so everything
+it writes into the mounted repository belongs to you. The commands above pass
+`FEATURE_WEBRTC=OFF` to the Linux containers, because WebRTC needs a
+multi-gigabyte download that is not part of the images; drop that argument for
+a WebRTC-enabled build on a machine that has the WebRTC checkout.
 
 The *android* container ships Android NDK r30 with `ANDROID_NDK_HOME` set.
 

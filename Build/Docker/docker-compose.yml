@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile_ubuntu24
     volumes:
       - ../..:/TeamTalk5:rw,z
-    user: root
+    user: "${LOCAL_UID:?set LOCAL_UID and LOCAL_GID from id -u and id -g}:${LOCAL_GID:?set LOCAL_UID and LOCAL_GID from id -u and id -g}"
     working_dir: /TeamTalk5
 
   ubuntu26:
@@ -14,7 +14,25 @@ services:
       dockerfile: Dockerfile_ubuntu26
     volumes:
       - ../..:/TeamTalk5:rw,z
-    user: root
+    user: "${LOCAL_UID:?set LOCAL_UID and LOCAL_GID from id -u and id -g}:${LOCAL_GID:?set LOCAL_UID and LOCAL_GID from id -u and id -g}"
+    working_dir: /TeamTalk5
+
+  debian12:
+    build:
+      context: .
+      dockerfile: Dockerfile_debian12
+    volumes:
+      - ../..:/TeamTalk5:rw,z
+    user: "${LOCAL_UID:?set LOCAL_UID and LOCAL_GID from id -u and id -g}:${LOCAL_GID:?set LOCAL_UID and LOCAL_GID from id -u and id -g}"
+    working_dir: /TeamTalk5
+
+  debian13:
+    build:
+      context: .
+      dockerfile: Dockerfile_debian13
+    volumes:
+      - ../..:/TeamTalk5:rw,z
+    user: "${LOCAL_UID:?set LOCAL_UID and LOCAL_GID from id -u and id -g}:${LOCAL_GID:?set LOCAL_UID and LOCAL_GID from id -u and id -g}"
     working_dir: /TeamTalk5
 
   android:
@@ -23,5 +41,5 @@ services:
       dockerfile: Dockerfile_android
     volumes:
       - ../..:/TeamTalk5:rw,z
-    user: root
+    user: "${LOCAL_UID:?set LOCAL_UID and LOCAL_GID from id -u and id -g}:${LOCAL_GID:?set LOCAL_UID and LOCAL_GID from id -u and id -g}"
     working_dir: /TeamTalk5
